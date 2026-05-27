@@ -158,6 +158,7 @@ class Cotizacion extends DB_connection
 
 function sanitizarNombreArchivo($texto)
 {
+    $texto = strval($texto);
     $texto = mb_strtolower(trim($texto), 'UTF-8');
     $texto = preg_replace('/[áàäâ]/u', 'a', $texto);
     $texto = preg_replace('/[éèëê]/u', 'e', $texto);
@@ -195,7 +196,7 @@ function guardarArchivoEvidencia($input_name, $id, $nom_cliente = null)
     $nombreSanitizado = sanitizarNombreArchivo($nom_cliente);
 
     $archivosExistentes = glob($folder . $nombreSanitizado . "_*." . $ext);
-    $siguienteNumero    = count($archivosExistentes) + 1;
+    $siguienteNumero    = (is_array($archivosExistentes)) ? count($archivosExistentes) + 1 : 1;
 
     $nombre  = $nombreSanitizado . "_" . $siguienteNumero . "_" . $fechaHoy . "." . $ext;
     $destino = $folder . $nombre;
@@ -232,27 +233,38 @@ if (isset($_POST['accion'])) {
         $monto       = is_numeric($monto) ? floatval($monto) : 0;
 
         try {
-            $rutaEvidencia = null;
-            if (isset($_FILES['adjunto']) && $_FILES['adjunto']['error'] === 0) {
-                $infoCliente = $Cotizacion->SelectOnlyOne(
-                    "SELECT nom_cliente FROM datos_fiscales WHERE id = " . intval($cliente_id)
-                );
-                $nom_cliente = $infoCliente ? $infoCliente['nom_cliente'] : null;
-                $rutaEvidencia = guardarArchivoEvidencia('adjunto', 0, $nom_cliente);
-            }
-
             $queryInsert = "INSERT INTO registros_cotizacion
             (registro_cotizacion_empresa, registro_cotizacion_cliente_id,
              registro_cotizacion_descripcion, registro_cotizacion_monto,
-             registro_cotizacion_fecha, registro_cotizacion_status,
-             registro_cotizacion_evidencia)
-            VALUES (?,?,?,?,?,?,?)";
+             registro_cotizacion_fecha, registro_cotizacion_status)
+            VALUES (?,?,?,?,?,?)";
 
-            $Cotizacion->ExecuteQueryWhitLastId($queryInsert, [$empresa, $cliente_id, $descripcion, $monto, $fecha, $status, $rutaEvidencia]);
+            $Cotizacion->ExecuteQueryWhitLastId($queryInsert, [$empresa, $cliente_id, $descripcion, $monto, $fecha, $status]);
             $id = $Cotizacion->GetLastId();
 
+            if (isset($_FILES['adjunto']) && $_FILES['adjunto']['error'] === 0 && $id) {
+                $nom_cliente = '';
+                try {
+                    $infoCliente = $Cotizacion->SelectOnlyOne(
+                        "SELECT nom_cliente FROM datos_fiscales WHERE id = " . intval($cliente_id)
+                    );
+                    if ($infoCliente && isset($infoCliente['nom_cliente'])) {
+                        $nom_cliente = strval($infoCliente['nom_cliente']);
+                    }
+                } catch (\Throwable $ex) {
+                    $nom_cliente = '';
+                }
+                $ruta = guardarArchivoEvidencia('adjunto', $id, $nom_cliente);
+                if ($ruta) {
+                    $Cotizacion->ExecuteQuery(
+                        "UPDATE registros_cotizacion SET registro_cotizacion_evidencia = ? WHERE registro_cotizacion_id = ?",
+                        [$ruta, intval($id)]
+                    );
+                }
+            }
+
             echo json_encode(["Resultado" => "correcto", "id" => $id]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             echo json_encode(["Resultado" => "error", "Mensaje" => $e->getMessage()]);
         }
         die();
@@ -276,10 +288,17 @@ if (isset($_POST['accion'])) {
         try {
             $rutaNueva = null;
             if (isset($_FILES['adjunto']) && $_FILES['adjunto']['error'] === 0) {
-                $infoCliente = $Cotizacion->SelectOnlyOne(
-                    "SELECT nom_cliente FROM datos_fiscales WHERE id = " . intval($cliente_id)
-                );
-                $nom_cliente = $infoCliente ? $infoCliente['nom_cliente'] : null;
+                $nom_cliente = '';
+                try {
+                    $infoCliente = $Cotizacion->SelectOnlyOne(
+                        "SELECT nom_cliente FROM datos_fiscales WHERE id = " . intval($cliente_id)
+                    );
+                    if ($infoCliente && isset($infoCliente['nom_cliente'])) {
+                        $nom_cliente = strval($infoCliente['nom_cliente']);
+                    }
+                } catch (\Throwable $ex) {
+                    $nom_cliente = '';
+                }
                 $rutaNueva = guardarArchivoEvidencia('adjunto', $id, $nom_cliente);
             }
 
@@ -307,7 +326,7 @@ if (isset($_POST['accion'])) {
             }
 
             echo json_encode(["Resultado" => "correcto"]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             echo json_encode(["Resultado" => "error", "Mensaje" => $e->getMessage()]);
         }
         die();
@@ -357,23 +376,30 @@ if (isset($_POST['accion'])) {
     if ($accion == "subir_archivo") {
         $id = intval($_POST['id'] ?? 0);
         try {
-            $infoCliente = $Cotizacion->SelectOnlyOne(
-                "SELECT df.nom_cliente FROM registros_cotizacion AS rc
-                 INNER JOIN datos_fiscales AS df ON df.id = rc.registro_cotizacion_cliente_id
-                 WHERE rc.registro_cotizacion_id = " . $id
-            );
-            $nom_cliente = $infoCliente ? $infoCliente['nom_cliente'] : null;
+            $nom_cliente = '';
+            try {
+                $infoCliente = $Cotizacion->SelectOnlyOne(
+                    "SELECT df.nom_cliente FROM registros_cotizacion AS rc
+                     INNER JOIN datos_fiscales AS df ON df.id = rc.registro_cotizacion_cliente_id
+                     WHERE rc.registro_cotizacion_id = " . $id
+                );
+                if ($infoCliente && isset($infoCliente['nom_cliente'])) {
+                    $nom_cliente = strval($infoCliente['nom_cliente']);
+                }
+            } catch (\Throwable $ex) {
+                $nom_cliente = '';
+            }
             $ruta = guardarArchivoEvidencia('adjunto', $id, $nom_cliente);
             if ($ruta) {
                 $Cotizacion->ExecuteQuery(
-                    "UPDATE registros_cotizacion SET registro_cotizacion_evidencia = '" . addslashes($ruta) . "' WHERE registro_cotizacion_id = " . $id,
-                    []
+                    "UPDATE registros_cotizacion SET registro_cotizacion_evidencia = ? WHERE registro_cotizacion_id = ?",
+                    [$ruta, $id]
                 );
                 echo json_encode(["Resultado" => "correcto", "ruta" => $ruta]);
             } else {
                 echo json_encode(["Resultado" => "error", "Mensaje" => "No se pudo guardar el archivo"]);
             }
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             echo json_encode(["Resultado" => "error", "Mensaje" => $e->getMessage()]);
         }
         die();
