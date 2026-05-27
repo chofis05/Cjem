@@ -187,7 +187,7 @@ function sanitizarNombreArchivo($texto)
     return $texto;
 }
 
-function guardarArchivoEvidencia($input_name, $id, $nom_cliente = null, $cliente_id = null)
+function guardarArchivoEvidencia($input_name, $id, $nom_cliente = null)
 {
     if (! isset($_FILES[$input_name]) || $_FILES[$input_name]['error'] !== 0) {
         return null;
@@ -204,29 +204,28 @@ function guardarArchivoEvidencia($input_name, $id, $nom_cliente = null, $cliente
         return null;
     }
 
-    if ($nom_cliente === null || $cliente_id === null) {
+    if ($nom_cliente === null) {
         $infoCliente = obtenerNombreCliente($id);
         if ($infoCliente) {
             $nom_cliente = $infoCliente['nombre'];
-            $cliente_id  = $infoCliente['cliente_id'];
         } else {
             $nom_cliente = 'sin_cliente';
-            $cliente_id  = 0;
         }
     }
 
-    $fechaHoy       = date('Y-m-d');
+    $fechaHoy         = date('dmy');
     $nombreSanitizado = sanitizarNombreArchivo($nom_cliente);
-    $nombreBase     = $nombreSanitizado . "_" . intval($cliente_id) . "_" . $fechaHoy;
 
-    $nombre  = $nombreBase . "." . $ext;
+    $archivosExistentes = glob($folder . $nombreSanitizado . "_*." . $ext);
+    $siguienteNumero    = count($archivosExistentes) + 1;
+
+    $nombre  = $nombreSanitizado . "_" . $siguienteNumero . "_" . $fechaHoy . "." . $ext;
     $destino = $folder . $nombre;
 
-    $contador = 1;
     while (file_exists($destino)) {
-        $nombre  = $nombreBase . "_" . $contador . "." . $ext;
+        $siguienteNumero++;
+        $nombre  = $nombreSanitizado . "_" . $siguienteNumero . "_" . $fechaHoy . "." . $ext;
         $destino = $folder . $nombre;
-        $contador++;
     }
 
     if (move_uploaded_file($_FILES[$input_name]['tmp_name'], $destino)) {
@@ -269,7 +268,7 @@ if (isset($_POST['accion'])) {
                     "SELECT nom_cliente FROM datos_fiscales WHERE id = " . intval($cliente_id)
                 );
                 $nom_cliente = $infoCliente ? $infoCliente['nom_cliente'] : null;
-                $ruta = guardarArchivoEvidencia('adjunto', $id, $nom_cliente, $cliente_id);
+                $ruta = guardarArchivoEvidencia('adjunto', $id, $nom_cliente);
                 if ($ruta) {
                     $Cotizacion->ExecuteQuery(
                         "UPDATE registros_cotizacion SET registro_cotizacion_evidencia = ? WHERE registro_cotizacion_id = ?",
