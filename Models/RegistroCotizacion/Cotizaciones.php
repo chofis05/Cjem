@@ -156,7 +156,15 @@ class Cotizacion extends DB_connection
     }
 }
 
-function guardarArchivoEvidencia($input_name, $id)
+function sanitizarNombreCliente($nombre)
+{
+    $nombre = trim($nombre);
+    $nombre = str_replace(' ', '_', $nombre);
+    $nombre = preg_replace('/[^A-Za-z0-9_\-áéíóúÁÉÍÓÚñÑ]/', '', $nombre);
+    return $nombre;
+}
+
+function guardarArchivoEvidencia($input_name, $id, $nombreCliente = '')
 {
     if (! isset($_FILES[$input_name]) || $_FILES[$input_name]['error'] !== 0) {
         return null;
@@ -173,7 +181,12 @@ function guardarArchivoEvidencia($input_name, $id)
         return null;
     }
 
-    $nombre  = "cotizacion_" . intval($id) . "_" . time() . "." . $ext;
+    $fechaHoy = date('dmY');
+    $clienteSanitizado = sanitizarNombreCliente($nombreCliente);
+    if ($clienteSanitizado === '') {
+        $clienteSanitizado = 'SinCliente';
+    }
+    $nombre  = $clienteSanitizado . "_" . intval($id) . "_" . $fechaHoy . "." . $ext;
     $destino = $folder . $nombre;
 
     if (move_uploaded_file($_FILES[$input_name]['tmp_name'], $destino)) {
@@ -201,6 +214,12 @@ if (isset($_POST['accion'])) {
         $status      = $_POST['status'] ?? 'Pendiente';
         $monto       = is_numeric($monto) ? floatval($monto) : 0;
 
+        $nombreCliente = '';
+        $qCliente = $Cotizacion->SelectOnlyOne("SELECT nom_cliente FROM datos_fiscales WHERE id = " . intval($cliente_id));
+        if ($qCliente) {
+            $nombreCliente = $qCliente['nom_cliente'] ?? '';
+        }
+
         try {
             $queryInsert = "INSERT INTO registros_cotizacion
             (registro_cotizacion_empresa, registro_cotizacion_cliente_id,
@@ -212,7 +231,7 @@ if (isset($_POST['accion'])) {
             $id = $Cotizacion->GetLastId();
 
             if (isset($_FILES['adjunto']) && $_FILES['adjunto']['error'] === 0 && $id) {
-                $ruta = guardarArchivoEvidencia('adjunto', $id);
+                $ruta = guardarArchivoEvidencia('adjunto', $id, $nombreCliente);
                 if ($ruta) {
                     $Cotizacion->ExecuteQuery(
                         "UPDATE registros_cotizacion SET registro_cotizacion_evidencia = ? WHERE registro_cotizacion_id = ?",
@@ -243,10 +262,16 @@ if (isset($_POST['accion'])) {
         $status      = $_POST['status'] ?? '';
         $monto       = is_numeric($monto) ? floatval($monto) : 0;
 
+        $nombreCliente = '';
+        $qCliente = $Cotizacion->SelectOnlyOne("SELECT nom_cliente FROM datos_fiscales WHERE id = " . intval($cliente_id));
+        if ($qCliente) {
+            $nombreCliente = $qCliente['nom_cliente'] ?? '';
+        }
+
         try {
             $rutaNueva = null;
             if (isset($_FILES['adjunto']) && $_FILES['adjunto']['error'] === 0) {
-                $rutaNueva = guardarArchivoEvidencia('adjunto', $id);
+                $rutaNueva = guardarArchivoEvidencia('adjunto', $id, $nombreCliente);
             }
 
             if ($rutaNueva) {
@@ -322,8 +347,18 @@ if (isset($_POST['accion'])) {
 
     if ($accion == "subir_archivo") {
         $id = $_POST['id'] ?? '';
+        $nombreCliente = '';
+        $qRow = $Cotizacion->SelectOnlyOne(
+            "SELECT df.nom_cliente
+             FROM registros_cotizacion rc
+             INNER JOIN datos_fiscales df ON df.id = rc.registro_cotizacion_cliente_id
+             WHERE rc.registro_cotizacion_id = " . intval($id)
+        );
+        if ($qRow) {
+            $nombreCliente = $qRow['nom_cliente'] ?? '';
+        }
         try {
-            $ruta = guardarArchivoEvidencia('adjunto', $id);
+            $ruta = guardarArchivoEvidencia('adjunto', $id, $nombreCliente);
             if ($ruta) {
                 $Cotizacion->ExecuteQuery(
                     "UPDATE registros_cotizacion SET registro_cotizacion_evidencia = ? WHERE registro_cotizacion_id = ?",

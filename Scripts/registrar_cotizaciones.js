@@ -68,6 +68,16 @@ var estilosModales = `
 #modal_subir_archivo .btn-subir { background: linear-gradient(135deg, #0f3460, #16213e); color: #fff; border: none; border-radius: 8px; padding: 9px 0; font-weight: 700; font-size: 13px; width: 100%; letter-spacing: .5px; transition: opacity .2s; }
 #modal_subir_archivo .btn-subir:hover { opacity: .88; }
 
+/* === Drag & Drop zones === */
+.drop-zone { border: 2px dashed #c4cad8; border-radius: 12px; background: #fff; padding: 28px 20px; text-align: center; transition: border-color .25s, background .25s; cursor: pointer; position: relative; }
+.drop-zone:hover { border-color: #4a6fa5; background: #f0f4ff; }
+.drop-zone.dragover { border-color: #0d6efd; background: #e8f0ff; }
+.drop-zone .drop-icon { font-size: 36px; color: #8a99b3; margin-bottom: 10px; }
+.drop-zone .drop-label { font-size: 13px; color: #6c757d; display: block; margin-bottom: 8px; }
+.drop-zone .drop-hint { font-size: 11px; color: #adb5bd; }
+.drop-zone .file-selected { margin-top: 10px; font-size: 12px; color: #198754; font-weight: 600; }
+.drop-zone .file-selected i { margin-right: 4px; }
+
 #modal_reactivar_fecha .modal-content { border-radius: 16px; overflow: hidden; border: none; box-shadow: 0 20px 60px rgba(0,0,0,.18); }
 #modal_reactivar_fecha .modal-header-custom { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; }
 #modal_reactivar_fecha .modal-header-custom h6 { color: #fff; font-size: 15px; font-weight: 700; margin: 0; letter-spacing: .4px; }
@@ -127,10 +137,12 @@ $("#modal_subir_archivo .modal-content").html(`
     </div>
     <div class="modal-body-custom">
         <input type="hidden" id="archivo_id">
-        <div class="upload-zone" id="upload_drop_zone">
-            <div class="upload-icon"><i class="fa-solid fa-file-pdf"></i></div>
-            <label>Selecciona el PDF de evidencia</label>
-            <input type="file" id="input_file_upload" class="form-control form-control-sm" accept="application/pdf">
+        <div class="drop-zone" id="upload_drop_zone">
+            <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+            <span class="drop-label">Arrastra tu PDF aquí o haz clic para seleccionar</span>
+            <span class="drop-hint">Solo archivos PDF</span>
+            <input type="file" id="input_file_upload" accept="application/pdf" style="display:none;">
+            <div class="file-selected" id="upload_file_name" style="display:none;"><i class="fa-solid fa-file-pdf"></i> <span></span></div>
         </div>
     </div>
     <div class="modal-footer-custom">
@@ -186,6 +198,66 @@ $(document).on("click", ".status-pill", function () {
   $(".status-pill").removeClass("active");
   $(this).addClass("active");
   $("#reactivar_status").val($(this).data("val"));
+});
+
+// ========== DRAG & DROP: modal_subir_archivo ==========
+var archivoDropEvidencia = null;
+
+function initDropZone(zoneSelector, fileInputSelector, fileNameSelector, setFileCb) {
+  $(document).on("click", zoneSelector, function (e) {
+    if (e.target.tagName !== "INPUT") $(fileInputSelector).trigger("click");
+  });
+  $(document).on("change", fileInputSelector, function () {
+    var file = this.files[0] || null;
+    if (file && file.type !== "application/pdf") {
+      Swal.fire("Atención", "Solo se permiten archivos PDF.", "warning");
+      $(this).val("");
+      return;
+    }
+    setFileCb(file);
+    if (file) {
+      $(fileNameSelector).find("span").text(file.name);
+      $(fileNameSelector).show();
+    } else {
+      $(fileNameSelector).hide();
+    }
+  });
+  $(document).on("dragover", zoneSelector, function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    $(this).addClass("dragover");
+  });
+  $(document).on("dragleave", zoneSelector, function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    $(this).removeClass("dragover");
+  });
+  $(document).on("drop", zoneSelector, function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    $(this).removeClass("dragover");
+    var files = e.originalEvent.dataTransfer.files;
+    if (files.length === 0) return;
+    var file = files[0];
+    if (file.type !== "application/pdf") {
+      Swal.fire("Atención", "Solo se permiten archivos PDF.", "warning");
+      return;
+    }
+    setFileCb(file);
+    $(fileNameSelector).find("span").text(file.name);
+    $(fileNameSelector).show();
+  });
+}
+
+initDropZone("#upload_drop_zone", "#input_file_upload", "#upload_file_name", function (f) {
+  archivoDropEvidencia = f;
+});
+
+// ========== DRAG & DROP: modal agregar/editar ==========
+var archivoDropModal = null;
+
+initDropZone("#modal_drop_zone", "#input_archivo_hidden", "#modal_file_name", function (f) {
+  archivoDropModal = f;
 });
 
 var tabla_registros_cotizacion = $("#tabla_registros_cotizacion").DataTable({
@@ -331,7 +403,9 @@ $(document).on("click", ".btn_editar_cotizacion", function () {
         $("#input_monto").val(d.Monto);
         $("#input_fecha").val(d.Fecha);
         $("#input_status").val(d.Status);
-        $("#input_archivo").val("");
+        $("#input_archivo_hidden").val("");
+        archivoDropModal = null;
+        $("#modal_file_name").hide();
         $("#modalLabel").html('<i class="fa-solid fa-pen"></i>&nbsp; EDITAR COTIZACIÓN');
         $("#btn_enviar_formulario").text("GUARDAR CAMBIOS");
         let modal = new bootstrap.Modal(document.getElementById("modal"));
@@ -371,6 +445,8 @@ $(document).on("click", ".btn_subir_evidencia", function (e) {
   e.preventDefault();
   $("#archivo_id").val($(this).attr("data-id"));
   $("#input_file_upload").val("");
+  archivoDropEvidencia = null;
+  $("#upload_file_name").hide();
   var modalArchivo = new bootstrap.Modal(document.getElementById("modal_subir_archivo"));
   modalArchivo.show();
 });
@@ -378,11 +454,12 @@ $(document).on("click", ".btn_subir_evidencia", function (e) {
 // GUARDAR ARCHIVO (registro ya existente)
 $(document).on("click", "#btn_guardar_archivo", function () {
   let fileInput = document.getElementById("input_file_upload");
-  if (fileInput.files.length === 0) {
-    Swal.fire("Atención", "Selecciona un archivo PDF.", "warning");
+  var archivo = archivoDropEvidencia || (fileInput && fileInput.files.length > 0 ? fileInput.files[0] : null);
+  if (!archivo) {
+    Swal.fire("Atención", "Selecciona o arrastra un archivo PDF.", "warning");
     return;
   }
-  if (fileInput.files[0].type !== "application/pdf") {
+  if (archivo.type !== "application/pdf") {
     Swal.fire("Atención", "Solo se permiten archivos PDF.", "warning");
     return;
   }
@@ -390,13 +467,14 @@ $(document).on("click", "#btn_guardar_archivo", function () {
   let formData = new FormData();
   formData.append("accion", "subir_archivo");
   formData.append("id", id);
-  formData.append("adjunto", fileInput.files[0]);
+  formData.append("adjunto", archivo);
 
   mostrarBlockOutCargando();
   $.ajax({
     url: "../Models/RegistroCotizacion/Cotizaciones.php",
     type: "POST", data: formData, processData: false, contentType: false,
     success: function () {
+      archivoDropEvidencia = null;
       var modalEl = document.getElementById("modal_subir_archivo");
       var modalInstancia = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
       modalInstancia.hide();
@@ -458,7 +536,9 @@ $("#btn_abrir_modal").on("click", function () {
   $("#id").val("");
   $("#input_status").val("Pendiente");
   $("#input_fecha").val(moment().format("YYYY-MM-DD"));
-  $("#input_archivo").val("");
+  $("#input_archivo_hidden").val("");
+  archivoDropModal = null;
+  $("#modal_file_name").hide();
   $("#input_cliente").val(null).trigger("change");
   $("#modalLabel").html('<i class="fa-solid fa-file-invoice-dollar"></i>&nbsp; AGREGAR COTIZACIÓN');
   $("#btn_enviar_formulario").text("AGREGAR");
@@ -486,7 +566,8 @@ $("#btn_enviar_formulario").off("click").on("click", function (e) {
     return;
   }
 
-  let archivoInput = document.getElementById("input_archivo");
+  let archivoHidden = document.getElementById("input_archivo_hidden");
+  var archivoFinal = archivoDropModal || (archivoHidden && archivoHidden.files.length > 0 ? archivoHidden.files[0] : null);
   let accionActual = $("#accion").val();
 
   let formData = new FormData();
@@ -499,8 +580,8 @@ $("#btn_enviar_formulario").off("click").on("click", function (e) {
   formData.append("fecha",       $("#input_fecha").val());
   formData.append("status",      $("#input_status").val());
 
-  if (archivoInput && archivoInput.files.length > 0) {
-    formData.append("adjunto", archivoInput.files[0]);
+  if (archivoFinal) {
+    formData.append("adjunto", archivoFinal);
   }
 
   mostrarBlockOutCargando();
@@ -517,6 +598,7 @@ $("#btn_enviar_formulario").off("click").on("click", function (e) {
 });
 
 function cerrarModalYRecargar() {
+  archivoDropModal = null;
   let modalElement = document.getElementById("modal");
   let modalInstance = bootstrap.Modal.getInstance(modalElement);
   if (modalInstance) modalInstance.hide();
@@ -539,6 +621,9 @@ $("#btn_reset_formulario").on("click", function () {
   $("#input_status").val("Pendiente");
   $("#input_fecha").val(moment().format("YYYY-MM-DD"));
   $("#input_cliente").val(null).trigger("change");
+  $("#input_archivo_hidden").val("");
+  archivoDropModal = null;
+  $("#modal_file_name").hide();
 });
 
 $("#modal").on("shown.bs.modal", function () {
