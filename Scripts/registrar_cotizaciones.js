@@ -114,6 +114,17 @@ var estilosModales = `
 #modal .select2-container--default .select2-selection--single .select2-selection__placeholder {
     color: #6c757d;
 }
+
+/* === Drag & Drop === */
+.drop-zone-area { border: 2px dashed #c4cad8; border-radius: 12px; background: #fff; padding: 28px 20px; text-align: center; transition: border-color .25s, background .25s, transform .15s; cursor: pointer; position: relative; }
+.drop-zone-area:hover { border-color: #4a6fa5; background: #f0f4ff; }
+.drop-zone-area.drag-over { border-color: #0d6efd; background: #e8f0ff; transform: scale(1.02); box-shadow: 0 4px 20px rgba(13,110,253,.15); }
+.drop-zone-area .drop-icon { font-size: 40px; color: #8a99b3; margin-bottom: 8px; transition: color .2s; }
+.drop-zone-area.drag-over .drop-icon { color: #0d6efd; }
+.drop-zone-area .drop-text { font-size: 13px; color: #6c757d; margin-bottom: 4px; }
+.drop-zone-area .drop-text-small { font-size: 11px; color: #adb5bd; }
+.drop-zone-area .file-selected { font-size: 12px; color: #198754; font-weight: 600; margin-top: 8px; }
+.drop-zone-area input[type="file"] { position: absolute; width: 100%; height: 100%; top: 0; left: 0; opacity: 0; cursor: pointer; }
 </style>`;
 $("head").append(estilosModales);
 
@@ -127,10 +138,12 @@ $("#modal_subir_archivo .modal-content").html(`
     </div>
     <div class="modal-body-custom">
         <input type="hidden" id="archivo_id">
-        <div class="upload-zone" id="upload_drop_zone">
-            <div class="upload-icon"><i class="fa-solid fa-file-pdf"></i></div>
-            <label>Selecciona el PDF de evidencia</label>
-            <input type="file" id="input_file_upload" class="form-control form-control-sm" accept="application/pdf">
+        <div class="drop-zone-area" id="upload_drop_zone">
+            <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+            <div class="drop-text">Arrastra y suelta tu archivo PDF aquí</div>
+            <div class="drop-text-small">o haz clic para seleccionar</div>
+            <input type="file" id="input_file_upload" accept="application/pdf">
+            <div class="file-selected" id="file_selected_name" style="display:none;"></div>
         </div>
     </div>
     <div class="modal-footer-custom">
@@ -558,4 +571,83 @@ document.addEventListener("hidden.bs.modal", function () {
   $("body").removeClass("modal-open");
   $(".modal-backdrop").remove();
   $("body").css("padding-right", "");
+});
+
+// =============================================
+// DRAG & DROP - Modal Subir Archivo
+// =============================================
+$(document).on("dragover", "#upload_drop_zone", function (e) {
+  e.preventDefault();
+  e.stopPropagation();
+  $(this).addClass("drag-over");
+});
+
+$(document).on("dragleave", "#upload_drop_zone", function (e) {
+  e.preventDefault();
+  e.stopPropagation();
+  $(this).removeClass("drag-over");
+});
+
+$(document).on("drop", "#upload_drop_zone", function (e) {
+  e.preventDefault();
+  e.stopPropagation();
+  $(this).removeClass("drag-over");
+
+  var files = e.originalEvent.dataTransfer.files;
+  if (files.length > 0) {
+    var file = files[0];
+    if (file.type === "application/pdf") {
+      var fileInput = document.getElementById("input_file_upload");
+      var dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      fileInput.files = dataTransfer.files;
+      $("#file_selected_name").text(file.name).show();
+    } else {
+      Swal.fire("Atención", "Solo se permiten archivos PDF.", "warning");
+    }
+  }
+});
+
+$(document).on("change", "#input_file_upload", function () {
+  if (this.files.length > 0) {
+    $("#file_selected_name").text(this.files[0].name).show();
+  } else {
+    $("#file_selected_name").hide();
+  }
+});
+
+// =============================================
+// DRAG & DROP - Formulario Agregar/Editar (campo evidencia)
+// =============================================
+$(document).on("dragover", "#input_archivo", function (e) {
+  e.preventDefault();
+  e.stopPropagation();
+  $(this).closest(".col-sm-10").addClass("drag-over-form");
+  $(this).css({ "border-color": "#0d6efd", "background": "#e8f0ff" });
+});
+
+$(document).on("dragleave", "#input_archivo", function (e) {
+  e.preventDefault();
+  e.stopPropagation();
+  $(this).closest(".col-sm-10").removeClass("drag-over-form");
+  $(this).css({ "border-color": "", "background": "" });
+});
+
+$(document).on("drop", "#input_archivo", function (e) {
+  e.preventDefault();
+  e.stopPropagation();
+  $(this).closest(".col-sm-10").removeClass("drag-over-form");
+  $(this).css({ "border-color": "", "background": "" });
+
+  var files = e.originalEvent.dataTransfer.files;
+  if (files.length > 0) {
+    var file = files[0];
+    if (file.type === "application/pdf") {
+      var dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      this.files = dataTransfer.files;
+    } else {
+      Swal.fire("Atención", "Solo se permiten archivos PDF.", "warning");
+    }
+  }
 });

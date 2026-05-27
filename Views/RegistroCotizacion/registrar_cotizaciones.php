@@ -202,9 +202,12 @@
                <input type="hidden" id="archivo_id">
                <div class="form-group text-center">
                   <label class="text-xs text-secondary fw-bold mb-2 d-block text-start">Seleccione el documento de evidencia:</label>
-                  <div class="card border-dashed p-3 bg-white text-center shadow-sm">
-                     <i class="fa-solid fa-cloud-arrow-up text-secondary fa-2x mb-2"></i>
-                     <input type="file" id="input_file_upload" class="form-control form-control-sm" accept="application/pdf">
+                  <div class="drop-zone-area" id="upload_drop_zone">
+                     <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                     <div class="drop-text">Arrastra y suelta tu archivo PDF aquí</div>
+                     <div class="drop-text-small">o haz clic para seleccionar</div>
+                     <input type="file" id="input_file_upload" accept="application/pdf">
+                     <div class="file-selected" id="file_selected_name" style="display:none;"></div>
                   </div>
                </div>
             </div>
