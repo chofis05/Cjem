@@ -149,8 +149,13 @@
                   <div class="mb-3 row">
                      <label class="col-sm-2 col-form-label fw-bold">Evidencia:</label>
                      <div class="col-sm-10">
-                        <input type="file" class="form-control" id="input_archivo" name="adjunto" accept="application/pdf">
-                        <small class="text-muted">Opcional. Adjunta el PDF de evidencia.</small>
+                        <div class="drop-zone" id="modal_drop_zone">
+                           <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                           <span class="drop-label">Arrastra tu PDF aquí o haz clic para seleccionar</span>
+                           <span class="drop-hint">Opcional. Solo archivos PDF</span>
+                           <input type="file" id="input_archivo_hidden" accept="application/pdf" style="display:none;">
+                           <div class="file-selected" id="modal_file_name" style="display:none;"><i class="fa-solid fa-file-pdf"></i> <span></span></div>
+                        </div>
                      </div>
                   </div>
                </form>
