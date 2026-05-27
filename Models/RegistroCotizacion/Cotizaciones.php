@@ -156,23 +156,6 @@ class Cotizacion extends DB_connection
     }
 }
 
-function obtenerNombreCliente($cotizacion_id)
-{
-    $db = new Cotizacion();
-    $query = "SELECT df.nom_cliente, df.id AS cliente_id
-              FROM registros_cotizacion AS rc
-              INNER JOIN datos_fiscales AS df ON df.id = rc.registro_cotizacion_cliente_id
-              WHERE rc.registro_cotizacion_id = " . intval($cotizacion_id);
-    $resultado = $db->SelectOnlyOne($query);
-    if ($resultado) {
-        return [
-            'nombre'     => $resultado['nom_cliente'],
-            'cliente_id' => $resultado['cliente_id']
-        ];
-    }
-    return null;
-}
-
 function sanitizarNombreArchivo($texto)
 {
     $texto = mb_strtolower(trim($texto), 'UTF-8');
@@ -204,13 +187,8 @@ function guardarArchivoEvidencia($input_name, $id, $nom_cliente = null)
         return null;
     }
 
-    if ($nom_cliente === null) {
-        $infoCliente = obtenerNombreCliente($id);
-        if ($infoCliente) {
-            $nom_cliente = $infoCliente['nombre'];
-        } else {
-            $nom_cliente = 'sin_cliente';
-        }
+    if ($nom_cliente === null || $nom_cliente === '') {
+        $nom_cliente = 'archivo';
     }
 
     $fechaHoy         = date('dmy');
@@ -302,7 +280,11 @@ if (isset($_POST['accion'])) {
         try {
             $rutaNueva = null;
             if (isset($_FILES['adjunto']) && $_FILES['adjunto']['error'] === 0) {
-                $rutaNueva = guardarArchivoEvidencia('adjunto', $id);
+                $infoCliente = $Cotizacion->SelectOnlyOne(
+                    "SELECT nom_cliente FROM datos_fiscales WHERE id = " . intval($cliente_id)
+                );
+                $nom_cliente = $infoCliente ? $infoCliente['nom_cliente'] : null;
+                $rutaNueva = guardarArchivoEvidencia('adjunto', $id, $nom_cliente);
             }
 
             if ($rutaNueva) {
@@ -379,7 +361,13 @@ if (isset($_POST['accion'])) {
     if ($accion == "subir_archivo") {
         $id = $_POST['id'] ?? '';
         try {
-            $ruta = guardarArchivoEvidencia('adjunto', $id);
+            $infoCliente = $Cotizacion->SelectOnlyOne(
+                "SELECT df.nom_cliente FROM registros_cotizacion AS rc
+                 INNER JOIN datos_fiscales AS df ON df.id = rc.registro_cotizacion_cliente_id
+                 WHERE rc.registro_cotizacion_id = " . intval($id)
+            );
+            $nom_cliente = $infoCliente ? $infoCliente['nom_cliente'] : null;
+            $ruta = guardarArchivoEvidencia('adjunto', $id, $nom_cliente);
             if ($ruta) {
                 $Cotizacion->ExecuteQuery(
                     "UPDATE registros_cotizacion SET registro_cotizacion_evidencia = ? WHERE registro_cotizacion_id = ?",
